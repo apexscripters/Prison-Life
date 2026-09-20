@@ -1,0 +1,613 @@
+--Variables principales y servicios del juego
+local CoreGui = game:GetService("CoreGui")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local Teams = game:GetService("Teams")
+local LocalPlayer = Players.LocalPlayer
+
+--Configuracion principal de las funciones
+local Config = {
+    ArrestActive = false,
+    Range = 15,
+    ItemActive = false,
+    Items = { M9 = false, ["Key card"] = false, Hammer = false },
+    PunchActive = false,
+    PunchRange = 12,
+    PunchCooldown = 0.4,
+    AutoHeal = false
+}
+
+--Eliminar la interfaz anterior si ya existe
+for _, v in ipairs(CoreGui:GetChildren()) do
+    if v.Name == "ApexPremiumUI" then v:Destroy() end
+end
+
+--Crear la interfaz principal
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ApexPremiumUI"
+ScreenGui.Parent = CoreGui
+
+--Crear boton flotante para mostrar la interfaz
+local ToggleBtn = Instance.new("ImageButton")
+ToggleBtn.Size = UDim2.new(0, 50, 0, 50)
+ToggleBtn.Position = UDim2.new(0.02, 0, 0.5, 0)
+ToggleBtn.Image = "rbxassetid://105612863536473"
+ToggleBtn.BackgroundTransparency = 1
+ToggleBtn.Parent = ScreenGui
+Instance.new("UICorner", ToggleBtn).CornerRadius = UDim.new(1, 0)
+
+--Controlar el arrastre del boton flotante
+local tDragging, tDragStart, tStartPos
+ToggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        tDragging = true
+        tDragStart = input.Position
+        tStartPos = ToggleBtn.Position
+    end
+end)
+
+ToggleBtn.InputChanged:Connect(function(input)
+    if tDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - tDragStart
+        ToggleBtn.Position = UDim2.new(tStartPos.X.Scale, tStartPos.X.Offset + delta.X, tStartPos.Y.Scale, tStartPos.Y.Offset + delta.Y)
+    end
+end)
+
+ToggleBtn.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        tDragging = false
+    end
+end)
+
+--Definir distancia minima para detectar un toque
+local dragThreshold = 5
+local clickStart
+
+--Detectar el inicio del toque del boton
+ToggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        clickStart = input.Position
+    end
+end)
+
+--Mostrar u ocultar la interfaz principal
+ToggleBtn.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        if clickStart and (input.Position - clickStart).Magnitude < dragThreshold then
+            if ScreenGui:FindFirstChild("MainFrame") then
+                ScreenGui.MainFrame.Visible = not ScreenGui.MainFrame.Visible
+            end
+        end
+    end
+end)
+
+--Crear marco principal de la interfaz
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 520, 0, 340)
+MainFrame.Position = UDim2.new(0.5, -260, 0.5, -170)
+MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 8)
+
+--Aplicar borde al marco principal
+local MainStroke = Instance.new("UIStroke", MainFrame)
+MainStroke.Color = Color3.fromRGB(40, 40, 45)
+MainStroke.Thickness = 1
+
+--Crear barra superior arrastrable
+local TopBar = Instance.new("Frame")
+TopBar.Size = UDim2.new(1, 0, 0, 40)
+TopBar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+
+--Crear linea decorativa de la barra superior
+local TopBarLine = Instance.new("Frame")
+TopBarLine.Size = UDim2.new(1, 0, 0, 2)
+TopBarLine.Position = UDim2.new(0, 0, 1, -2)
+TopBarLine.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+TopBarLine.BorderSizePixel = 0
+TopBarLine.Parent = TopBar
+
+--Crear titulo de la interfaz
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(0, 250, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "⚡ APEX | PRISON LIFE"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 16
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+--Crear botones para minimizar y cerrar
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 35, 0, 35)
+MinBtn.Position = UDim2.new(1, -75, 0, 2)
+MinBtn.BackgroundTransparency = 1
+MinBtn.Text = "-"
+MinBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+MinBtn.Font = Enum.Font.GothamBlack
+MinBtn.TextSize = 22
+MinBtn.Parent = TopBar
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 35, 0, 35)
+CloseBtn.Position = UDim2.new(1, -35, 0, 2)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(200, 60, 60)
+CloseBtn.Font = Enum.Font.GothamBlack
+CloseBtn.TextSize = 16
+CloseBtn.Parent = TopBar
+
+--Crear ventana de confirmacion para cerrar
+local ConfirmFrame = Instance.new("Frame")
+ConfirmFrame.Size = UDim2.new(0, 260, 0, 130)
+ConfirmFrame.Position = UDim2.new(0.5, -130, 0.5, -65)
+ConfirmFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+ConfirmFrame.Visible = false
+ConfirmFrame.Parent = ScreenGui
+Instance.new("UICorner", ConfirmFrame).CornerRadius = UDim.new(0, 8)
+Instance.new("UIStroke", ConfirmFrame).Color = Color3.fromRGB(255, 60, 60)
+
+--Mostrar mensaje de confirmacion
+local ConfirmText = Instance.new("TextLabel")
+ConfirmText.Size = UDim2.new(1, 0, 0, 60)
+ConfirmText.Position = UDim2.new(0, 0, 0, 10)
+ConfirmText.BackgroundTransparency = 1
+ConfirmText.Text = "Desea cerrar el Apex?"
+ConfirmText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ConfirmText.Font = Enum.Font.GothamBold
+ConfirmText.TextSize = 16
+ConfirmText.Parent = ConfirmFrame
+
+--Crear boton para confirmar el cierre
+local BtnSim = Instance.new("TextButton")
+BtnSim.Size = UDim2.new(0, 100, 0, 35)
+BtnSim.Position = UDim2.new(0, 20, 0, 75)
+BtnSim.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+BtnSim.Text = "Sim"
+BtnSim.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnSim.Font = Enum.Font.GothamBold
+BtnSim.Parent = ConfirmFrame
+Instance.new("UICorner", BtnSim).CornerRadius = UDim.new(0, 6)
+
+--Crear boton para cancelar el cierre
+local BtnNao = Instance.new("TextButton")
+BtnNao.Size = UDim2.new(0, 100, 0, 35)
+BtnNao.Position = UDim2.new(1, -120, 0, 75)
+BtnNao.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+BtnNao.Text = "Nao"
+BtnNao.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnNao.Font = Enum.Font.GothamBold
+BtnNao.Parent = ConfirmFrame
+Instance.new("UICorner", BtnNao).CornerRadius = UDim.new(0, 6)
+
+--Controlar el estado de minimizacion
+local minimized = false
+
+MinBtn.MouseButton1Click:Connect(function()
+    minimized = not minimized
+    local targetSize = minimized and UDim2.new(0, 520, 0, 40) or UDim2.new(0, 520, 0, 340)
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = targetSize}):Play()
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    ConfirmFrame.Visible = true
+end)
+
+BtnSim.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+BtnNao.MouseButton1Click:Connect(function()
+    ConfirmFrame.Visible = false
+    MainFrame.Visible = true
+end)
+
+--Controlar el arrastre del marco principal
+local mDragging, mDragStart, mStartPos
+
+TopBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        mDragging = true
+        mDragStart = input.Position
+        mStartPos = MainFrame.Position
+    end
+end)
+
+TopBar.InputChanged:Connect(function(input)
+    if mDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - mDragStart
+        MainFrame.Position = UDim2.new(mStartPos.X.Scale, mStartPos.X.Offset + delta.X, mStartPos.Y.Scale, mStartPos.Y.Offset + delta.Y)
+    end
+end)
+
+TopBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        mDragging = false
+    end
+end)
+
+--Crear barra lateral para las pestañas
+local Sidebar = Instance.new("Frame")
+Sidebar.Size = UDim2.new(0, 140, 1, -40)
+Sidebar.Position = UDim2.new(0, 0, 0, 40)
+Sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+Sidebar.BorderSizePixel = 0
+Sidebar.Parent = MainFrame
+
+--Crear area de contenido de las pestañas
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, -140, 1, -40)
+Content.Position = UDim2.new(0, 140, 0, 40)
+Content.BackgroundTransparency = 1
+Content.Parent = MainFrame
+
+--Organizar los botones de la barra lateral
+local SidebarLayout = Instance.new("UIListLayout", Sidebar)
+SidebarLayout.Padding = UDim.new(0, 5)
+SidebarLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+Instance.new("UIPadding", Sidebar).PaddingTop = UDim.new(0, 10)
+
+--Crear boton para cada pestaña
+local function CreateTabBtn(text)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    btn.Font = Enum.Font.GothamSemibold
+    btn.TextSize = 13
+    btn.Parent = Sidebar
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    return btn
+end
+
+--Crear pestañas principales
+local TabTimes = CreateTabBtn("Mudar Time")
+local TabPlayer = CreateTabBtn("Vida Infinita")
+local TabArrest = CreateTabBtn("Auto Arrest")
+local TabItems = CreateTabBtn("Pegar Itens")
+local TabPunch = CreateTabBtn("Aura Soco")
+
+--Crear lista de paginas disponibles
+local Pages = {}
+
+--Crear una pagina desplazable para cada pestaña
+local function CreatePage()
+    local page = Instance.new("ScrollingFrame")
+    page.Size = UDim2.new(1, 0, 1, 0)
+    page.BackgroundTransparency = 1
+    page.ScrollBarThickness = 3
+    page.Visible = false
+    page.Parent = Content
+    Instance.new("UIPadding", page).PaddingTop = UDim.new(0, 15)
+    local layout = Instance.new("UIListLayout", page)
+    layout.Padding = UDim.new(0, 10)
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    table.insert(Pages, page)
+    return page
+end
+
+--Crear paginas de cada seccion
+local PageTimes = CreatePage()
+local PagePlayer = CreatePage()
+local PageArrest = CreatePage()
+local PageItems = CreatePage()
+local PagePunch = CreatePage()
+PageTimes.Visible = true
+
+--Guardar botones de las pestañas
+local TabBtns = {TabTimes, TabPlayer, TabArrest, TabItems, TabPunch}
+
+--Cambiar entre las pestañas disponibles
+local function SwitchTab(btnObj, pageObj)
+    for _, btn in pairs(TabBtns) do
+        btn.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+        btn.TextColor3 = Color3.fromRGB(180, 180, 180)
+    end
+
+    for _, page in pairs(Pages) do
+        page.Visible = false
+    end
+
+    TweenService:Create(btnObj, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 60, 60), TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+    pageObj.Visible = true
+end
+
+--Seleccionar la primera pestaña
+SwitchTab(TabTimes, PageTimes)
+
+--Conectar los botones de las pestañas
+TabTimes.MouseButton1Click:Connect(function() SwitchTab(TabTimes, PageTimes) end)
+TabPlayer.MouseButton1Click:Connect(function() SwitchTab(TabPlayer, PagePlayer) end)
+TabArrest.MouseButton1Click:Connect(function() SwitchTab(TabArrest, PageArrest) end)
+TabItems.MouseButton1Click:Connect(function() SwitchTab(TabItems, PageItems) end)
+TabPunch.MouseButton1Click:Connect(function() SwitchTab(TabPunch, PagePunch) end)
+
+--Crear boton de activacion y desactivacion
+local function CreateToggle(parent, text, stateTable, stateKey)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 40)
+    btn.BackgroundColor3 = stateTable[stateKey] and Color3.fromRGB(50, 150, 80) or Color3.fromRGB(35, 35, 40)
+    btn.Text = text .. " : " .. (stateTable[stateKey] and "ON" or "OFF")
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = parent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    Instance.new("UIStroke", btn).Color = Color3.fromRGB(60, 60, 70)
+
+    btn.MouseButton1Click:Connect(function()
+        stateTable[stateKey] = not stateTable[stateKey]
+        btn.Text = text .. " : " .. (stateTable[stateKey] and "ON" or "OFF")
+        TweenService:Create(btn, TweenInfo.new(0.3), {BackgroundColor3 = stateTable[stateKey] and Color3.fromRGB(50, 150, 80) or Color3.fromRGB(35, 35, 40)}):Play()
+    end)
+end
+
+--Crear boton para ejecutar una accion
+local function CreateActionBtn(parent, text, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 40)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = parent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    Instance.new("UIStroke", btn).Color = Color3.fromRGB(80, 80, 100)
+    btn.MouseButton1Click:Connect(callback)
+end
+
+--Configurar acciones de la pestaña de equipos
+CreateActionBtn(PageTimes, "👮 Virar Policial", function()
+    task.spawn(function()
+        pcall(function()
+            ReplicatedStorage.Remotes.RequestTeamChange:InvokeServer(Teams.Guards, 1)
+        end)
+    end)
+end)
+
+CreateActionBtn(PageTimes, "🧡 Virar Prisioneiro", function()
+    task.spawn(function()
+        pcall(function()
+            ReplicatedStorage.Remotes.RequestTeamChange:InvokeServer(Teams.Inmates, 1)
+        end)
+    end)
+end)
+
+CreateActionBtn(PageTimes, "👻 Virar Neutro", function()
+    task.spawn(function()
+        pcall(function()
+            ReplicatedStorage.Remotes.RequestTeamChange:InvokeServer(Teams.Neutral, 1)
+        end)
+    end)
+end)
+
+--Configurar funcion de vida infinita
+CreateToggle(PagePlayer, "Vida Infinita (Auto-Comer)", Config, "AutoHeal")
+
+--Configurar funcion de arresto automatico
+CreateToggle(PageArrest, "Ligar Auto Arrest", Config, "ArrestActive")
+
+--Configurar funciones para recoger objetos
+CreateToggle(PageItems, "Loop Pegar Itens", Config, "ItemActive")
+CreateToggle(PageItems, "Arma: M9", Config.Items, "M9")
+CreateToggle(PageItems, "Acesso: Key card", Config.Items, "Key card")
+CreateToggle(PageItems, "Arma: Martelo", Config.Items, "Hammer")
+
+--Configurar funcion de aura de golpe
+CreateToggle(PagePunch, "Aura de Soco", Config, "PunchActive")
+
+--Obtener referencias importantes para los remotos
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 5)
+
+--Ejecutar el sistema de curacion automatica
+task.spawn(function()
+    while task.wait(0.2) do
+        if not Config.AutoHeal then continue end
+
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+
+        if char and hum and root and hum.Health > 0 and hum.Health < 40 then
+            local itemsFolder = workspace:FindFirstChild("Prison_ITEMS") and workspace.Prison_ITEMS:FindFirstChild("giver")
+            if not itemsFolder then continue end
+
+            local targetFood = nil
+            for _, meal in ipairs({"Breakfast", "Lunch", "Dinner"}) do
+                local folder = itemsFolder:FindFirstChild(meal)
+                if folder then
+                    targetFood = folder:FindFirstChildOfClass("Model")
+                    if targetFood then break end
+                end
+            end
+
+            if targetFood then
+                local pickup = targetFood:FindFirstChild("ITEMPICKUP") or targetFood
+                if pickup and pickup:IsA("BasePart") then
+                    local originalCFrame = root.CFrame
+
+                    local plataforma = Instance.new("Part")
+                    plataforma.Size = Vector3.new(2, 0.090, 5)
+                    plataforma.CFrame = pickup.CFrame * CFrame.new(0, -2, 0)
+                    plataforma.Anchored = true
+                    plataforma.Transparency = 1
+                    plataforma.CanCollide = true
+                    plataforma.Color = Color3.fromRGB(0, 0, 0)
+                    plataforma.Material = Enum.Material.Neon
+                    plataforma.Parent = workspace
+
+                    hum.PlatformStand = true
+                    root.CFrame = pickup.CFrame
+
+                    --Ejecutar la interaccion en segundo plano
+                    task.spawn(function()
+                        pcall(function()
+                            Remotes.InteractWithItem:InvokeServer(targetFood)
+                        end)
+                    end)
+
+                    task.wait(0.1)
+
+                    root.CFrame = originalCFrame
+                    hum.PlatformStand = false
+                    plataforma:Destroy()
+
+                    task.wait(0.1)
+
+                    --Ejecutar la accion de comer
+                    task.spawn(function()
+                        pcall(function()
+                            Remotes.EatFood:FireServer()
+                        end)
+                    end)
+
+                    task.wait(1.5)
+                end
+            end
+        end
+    end
+end)
+
+--Ejecutar el sistema de arresto automatico
+task.spawn(function()
+    while task.wait(0.2) do
+        if not Config.ArrestActive then continue end
+
+        local char = LocalPlayer.Character
+        local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+        if not myRoot then continue end
+
+        local myPos = myRoot.Position
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character.Humanoid.Health > 0 then
+                local team = plr.Team and plr.Team.Name or ""
+
+                if team == "Criminal" or team == "Criminals" or team == "Prisoners" or team == "Inmates" then
+                    local tRoot = plr.Character.HumanoidRootPart
+
+                    if (myPos - tRoot.Position).Magnitude <= Config.Range then
+                        --Enviar la accion en una tarea separada
+                        task.spawn(function()
+                            pcall(function()
+                                local ev = Remotes and Remotes:FindFirstChild("ArrestPlayer")
+
+                                if ev then
+                                    if ev:IsA("RemoteEvent") then
+                                        ev:FireServer(plr, 1)
+                                    else
+                                        ev:InvokeServer(plr, 1)
+                                    end
+                                else
+                                    workspace.Remote.arrest:InvokeServer(plr.Character.Head)
+                                end
+                            end)
+                        end)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+--Intentar recoger un objeto especifico
+local function TryGrabItem(itemName)
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    local char = LocalPlayer.Character
+
+    if (bp and bp:FindFirstChild(itemName)) or (char and char:FindFirstChild(itemName)) then
+        return
+    end
+
+    task.spawn(function()
+        pcall(function()
+            local ev = Remotes and Remotes:FindFirstChild("GiverPressed")
+
+            if itemName == "Hammer" then
+                local hammer = ReplicatedStorage:FindFirstChild("Hammer")
+
+                if hammer and ev then
+                    ev:FireServer(hammer)
+                end
+            else
+                local giverFolder = workspace:FindFirstChild("Prison_ITEMS") and workspace.Prison_ITEMS:FindFirstChild("giver")
+
+                if giverFolder and giverFolder:FindFirstChild(itemName) then
+                    local pickup = giverFolder[itemName]:FindFirstChild("ITEMPICKUP")
+
+                    if pickup then
+                        if ev then
+                            ev:FireServer(pickup)
+                        else
+                            workspace.Remote.ItemHandler:InvokeServer(pickup)
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+--Mantener la recogida automatica de objetos
+task.spawn(function()
+    while task.wait(1) do
+        if Config.ItemActive then
+            for itemName, active in pairs(Config.Items) do
+                if active then
+                    TryGrabItem(itemName)
+                end
+            end
+        end
+    end
+end)
+
+--Ejecutar el sistema de aura de golpes
+local lastPunch = 0
+
+task.spawn(function()
+    while task.wait(0.1) do
+        if not Config.PunchActive then continue end
+
+        local now = tick()
+
+        if now - lastPunch < Config.PunchCooldown then continue end
+
+        local char = LocalPlayer.Character
+        local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+
+        if not myRoot then continue end
+
+        local myPos = myRoot.Position
+
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character.Humanoid.Health > 0 then
+                local tRoot = plr.Character.HumanoidRootPart
+
+                if (myPos - tRoot.Position).Magnitude <= Config.PunchRange then
+                    task.spawn(function()
+                        pcall(function()
+                            local melee = ReplicatedStorage:FindFirstChild("meleeEvent")
+
+                            if melee then
+                                melee:FireServer(plr, 1, 1)
+                            end
+                        end)
+                    end)
+
+                    lastPunch = now
+                    break
+                end
+            end
+        end
+    end
+end)
